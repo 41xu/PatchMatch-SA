@@ -30,7 +30,7 @@ def initialize():
             rx,ry=randbr[i,j],randbc[i,j]
             b = B[:, rx - p:rx + p + 1, ry - p:ry + p + 1]  # random patch
             # print("a shape, b shape: ",a.shape,b.shape)
-            f[i, j] = torch.tensor([randbr[i, j] - i, randbc[i, j] - j],dtype=int)  # offset,b-a
+            f[i, j] = torch.tensor([randbr[i, j] - i, randbc[i, j] - j])  # offset,b-a
             D[i, j] = torch.sum(torch.abs(a - b))  # i,j 对应offset(f(i,j))的patch distance
     # 为了propagation方便计算f(x-1,y),f(x,y-1),f(x+1,y),f(x,y+1)这里对f进行填充
     # f有用的地方其实没有Ah,Aw那么大，对于边界值也是需要处理的，我们就把四条边的旁边的f用他们本身填充
@@ -51,11 +51,14 @@ def propagation(x, y, itr):
     由于是global f,D 所以这里没有return
     """
     if itr % 2 == 1:  # odd奇数，左往右，上往下迭代
-        if D[x, y] > D[x - 1, y] or D[x, y] > D[x, y - 1]:
-            f[x,y]= f[x-1,y] if D[x-1,y]<D[x,y-1] else f[x,y-1] if D[x,y-1]<D[x,y] else f[x,y]
+        # 这里得判断一下合不合法，更新f的时候注意重算坐标差
+        if D[x, y] > D[min(max(x - 1,p),Ah-1-p),y] or D[x, y] > D[x, min(max(y - 1,p),Aw-1-p)]:
+            print("case1")
+            f[x,y]= torch.tensor([f[min(max(x - 1,p),Ah-1-p),y][0]-1,f[min(max(x - 1,p),Ah-1-p),y][1]]) if D[min(max(x - 1,p),Ah-1-p),y]<D[x,min(max(y - 1,p),Aw-1-p)] else torch.tensor([f[x,min(max(y - 1,p),Aw-1-p)][0],f[x,min(max(y - 1,p),Aw-1-p)][1]-1]) if D[x,min(max(y - 1,p),Aw-1-p)]<D[x,y] else f[x,y]
     else:  # even偶数，右往左，下往上迭代
-        if D[x, y] > D[x + 1, y] or D[x, y] > D[x, y + 1]:
-            f[x,y]=f[x+1,y] if D[x+1,y]<D[x,y+1] else f[x,y+1] if D[x,y+1]<D[x,y] else f[x,y]
+        if D[x, y] > D[max(min(x + 1,Ah-1-p),0), y] or D[x, y] > D[x, max(0,min(y + 1,Aw-p-1))]:
+            print("case2")
+            f[x,y]=torch.tensor([f[max(0,min(x+1,Ah-1-p)),y][0]+1,f[max(0,min(x+1,Ah-1-p)),y][1]])if D[max(0,min(x+1,Ah-1-p)),y]<D[x,max(0,min(y + 1,Aw-p-1))] else torch.tensor([f[x,max(0,min(y + 1,Aw-p-1))][0],f[x,max(0,min(y + 1,Aw-p-1))][1]+1]) if D[x,max(0,min(y + 1,Aw-p-1))]<D[x,y] else f[x,y]
     offset=f[x,y]
     print("x,y,offset",x,y,offset)
     a=A[:,x-p:x+p+1,y-p:y+p+1]
